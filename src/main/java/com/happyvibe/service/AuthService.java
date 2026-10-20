@@ -2,44 +2,61 @@ package com.happyvibe.service;
 
 import com.happyvibe.model.User;
 import com.happyvibe.repository.UserRepository;
-import org.mindrot.jbcrypt.BCrypt;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-
-import java.util.Optional;
 
 @Service
 public class AuthService {
+    private final UserRepository users;
+    private final PasswordEncoder passwordEncoder;
+    private final AppSession session;
 
-    @Autowired
-    private UserRepository userRepository;
-
-    public User registerUser(String username, String rawPassword) {
-        if (userRepository.findByUsername(username).isPresent()) {
-            throw new IllegalArgumentException("User already exists.");
-        }
-
-        // generates a safety hash for each password
-        String hashedPassword = BCrypt.hashpw(rawPassword, BCrypt.gensalt());
-
-        User newUser = new User();
-        newUser.setUsername(username);
-        newUser.setPasswordHash(hashedPassword);
-
-        return userRepository.save(newUser);
+    public AuthService(UserRepository users, PasswordEncoder passwordEncoder, AppSession session) {
+        this.users = users;
+        this.passwordEncoder = passwordEncoder;
+        this.session = session;
     }
 
-    public User login(String username, String rawPassword) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
-
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
-            // password vs saved hash
-            if (BCrypt.checkpw(rawPassword, user.getPasswordHash())) {
-                AppSession.getInstance().setCurrentUser(user);
-                return user;
-            }
+    public User register(String username, String password) {
+        String cleanUsername = cleanUsername(username);
+        validatePassword(password);
+        if (users.findByUsername(cleanUsername).isPresent()) {
+            throw new IllegalArgumentException("That username already exists.");
         }
-        throw new IllegalArgumentException("Invalid Credentials.");
+        long id = users.create(cleanUsername, passwordEncoder.encode(password));
+        User user = users.findById(id).orElseThrow();
+        session.login(user);
+        return user;
+    }
+
+    public User login(String username, String password) {
+        String cleanUsername = cleanUsername(username);
+        User user = users.findByUsername(cleanUsername)
+                .orElseThrow(() -> new IllegalArgumentException("Wrong username or password."));
+        if (!passwordEncoder.matches(password == null ? "" : password, user.passwordHash())) {
+            throw new IllegalArgumentException("Wrong username or password.");
+        }
+        session.login(user);
+        return user;
+    }
+
+    public void logout() {
+        session.logout();
+    }
+
+    private String cleanUsername(String username) {
+        if (username == null || username.trim().length() < 3 || username.trim().length() > 30) {
+            throw new IllegalArgumentException("Username must be 3 to 30 characters.");
+        }
+        if (!username.trim().matches("[A-Za-z0-9_.-]+")) {
+            throw new IllegalArgumentException("Username may use letters, numbers, dot, dash and underscore only.");
+        }
+        return username.trim();
+    }
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 6) {
+            throw new IllegalArgumentException("Password must have at least 6 characters.");
+        }
     }
 }
