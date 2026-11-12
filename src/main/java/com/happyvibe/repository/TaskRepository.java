@@ -76,6 +76,45 @@ public class TaskRepository {
         jdbc.update("UPDATE tasks SET status = ? WHERE id = ?", status.name(), taskId);
     }
 
+
+    public void update(long taskId, String title, String course,
+                       String description, LocalDateTime dueAt) {
+
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("Task title cannot be empty");
+        }
+
+        String sql = """
+            UPDATE tasks
+            SET title = ?, course = ?, description = ?, due_at = ?
+            WHERE id = ?
+            """;
+
+        int rowsAffected = jdbc.update(
+                sql,
+                title.trim(),
+                course,
+                description,
+                dueAt == null ? null : dueAt.toString(),
+                taskId
+        );
+
+        if (rowsAffected == 0) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+    }
+
+    public void delete(long taskId) {
+        int rowsAffected = jdbc.update(
+                "DELETE FROM tasks WHERE id = ?",
+                taskId
+        );
+
+        if (rowsAffected == 0) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+    }
+
     @Transactional
     public void replaceAssignees(long taskId, List<Long> userIds) {
         jdbc.update("DELETE FROM task_assignees WHERE task_id = ?", taskId);
