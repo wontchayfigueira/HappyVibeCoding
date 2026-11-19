@@ -73,9 +73,21 @@ public class TaskRepository {
     }
 
     public void updateStatus(long taskId, TaskStatus status) {
-        jdbc.update("UPDATE tasks SET status = ? WHERE id = ?", status.name(), taskId);
-    }
 
+        if (status == null) {
+            throw new IllegalArgumentException("Task status cannot be null");
+        }
+
+        int rowsAffected = jdbc.update(
+                "UPDATE tasks SET status = ? WHERE id = ?",
+                status.name(),
+                taskId
+        );
+
+        if (rowsAffected == 0) {
+            throw new IllegalArgumentException("Task not found: " + taskId);
+        }
+    }
 
     public void update(long taskId, String title, String course,
                        String description, LocalDateTime dueAt) {
